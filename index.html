@@ -1,275 +1,52 @@
 <!DOCTYPE html>
 <html>
 <head>
-<style>
-    * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-        font: inherit;
-        border: 0;
-        background: inherit;
-    }
-    html {
-        font-size: 62.5%;
-    }
-    body {
-        font-family: 'Helvetica Neue', sans-serif;
-        font-size: 1.4rem;
-    }
-    img {
-        max-width: 100%;
-        max-height: 100%;
-    }
-    .button {
-        border: 1px solid;
-        border-radius: .5rem;
-        padding: .4rem .6rem;
-        color: blue;
-        cursor: pointer;
-    }
-    .l-split {
-        float: left;
-        width: 50%;
-    }
-    .l-footer {
-        background: blue;
-        clear: both;
-        height: 33vh;
-        overflow: scroll;
-        width: 100%;
-    }
-    .u-list--horiz {
-        list-style: none;
-    }
-    .u-list--horiz > li {
-        display: inline;
-    }
-    .u-hiddenLayer {
-        pointer-events: none;
-        position: absolute;
-        visibility: hidden;
-        z-index: -1;
-    }
-</style>
+    <title>Gif Maker</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
 
-
-<div class="l-split">
-    <div id="WebcamView"></div>
+<div class="l-row l-row--2of3 l-fixed l-top">
+    <div class="l-col l-col--half">
+        <div id="WebcamView"></div>
+    </div>
+    <div class="l-col l-col--half">
+        <div id="GifView"></div>
+    </div>
 </div>
-<div class="l-split">
-    <div id="GifView"></div>
-</div>
-<div class="l-footer">
+<div class="l-row l-row--1of3 l-fixed l-bottom">
     <div id="TimelineView"></div>
 </div>
 
 <script id="WebcamViewTemplate" type="text/mustache">
-    <button class="button" id="{{buttonElemId}}">Take Image Sequence</button>
+    <canvas class="u-hiddenLayer" id="{{canvasElemId}}" height="{{height}}" width="{{width}}"></canvas>
     <video autoplay="true" id="{{videoElemId}}" height="{{height}}" width="{{width}}">
         <source src="{{videoStreamUrl}}"></source>
     </video>
-    <canvas class="u-hiddenLayer" id="{{canvasElemId}}" height="{{height}}" width="{{width}}"></canvas>
+    <button class="button l-abs l-top" id="{{buttonElemId}}">Take Image Sequence</button>
 </script>
 <script id="TimelineViewTemplate" type="text/mustache">
-    <ul class="u-list--horiz">
+    <ul class="Timeline u-list--horiz">
         {{#frames}}
-            <li>
+            <li class="Timeline__item">
                 <img src="{{.}}">
             </li>
         {{/frames}}
     </ul>
+    <button class="button" id="{{clearAllButtonElemId}}">Clear All</button>
 </script>
 <script id="GifViewTemplate" type="text/mustache">
     <img src="{{src}}">
-    <button class="button" id="{{buttonElemId}}">Make Gif</button>
+    <button class="button l-abs l-top" id="{{buttonElemId}}">Make Gif</button>
 </script>
 <script src="bower_components/mustache/mustache.js"></script>
 <script src="bower_components/gif.js/dist/gif.js"></script>
 <script src="bower_components/gif.js/dist/gif.worker.js"></script>
+<script src="Ctrl.js"></script>
+<script src="TimelineCtrl.js"></script>
+<script src="WebcamCtrl.js"></script>
+<script src="GifCtrl.js"></script>
 <script>
-
-/*
-    Controller
-*/
-
-function Controller () {}
-Controller.prototype.on = function (ev, callback) {
-    this._on = this._on || {};
-    this._on[ev] = this._on[ev] || [];
-    this._on[ev].push(callback);
-};
-Controller.prototype.emit = function (ev, data) {
-    this._on = this._on || {};
-    this._on[ev] = this._on[ev] || [];
-    this._on[ev].forEach(function(callback) {
-        callback(data);
-    });
-};
-Controller.prototype.render = function () {
-    this.elem.innerHTML = this.renderEngine.render(this.template, this.data);
-};
-Controller.prototype.renderEngine = Mustache;
-
-/*
-    Webcam
-*/
-
-function WebcamController (elem, template) {
-    this.elem = elem;
-    this.template = template;
-    this.data = {};
-
-    this.data.height = 500; // TODO
-    this.data.width = 500; // TODO
-
-    this.data.videoElemId = 'video_' + Date.now();
-    this.data.canvasElemId = 'canvas_' + Date.now();
-    this.data.buttonElemId = 'button_' + Date.now();
-
-    this.elem.addEventListener('click', function (e) {
-        if (e.target.getAttribute('id') === this.data.buttonElemId) {
-            this.takeImageSequence();
-        }
-    }.bind(this));
-
-    Object.observe(this.data, this.render.bind(this));
-
-    this.requestPermission();
-}
-WebcamController.prototype = new Controller();
-WebcamController.prototype.requestPermission = function (callback) {
-    navigator.webkitGetUserMedia({ // TODO webkit
-            'video': true
-        }, function (stream) {
-            this._handleStream(stream);
-            if (callback) {
-                callback(); // TODO
-            }
-        }.bind(this), function (error) {
-            throw new Error(error);
-        });
-};
-WebcamController.prototype._handleStream = function (stream) {
-    this.stream = stream;
-    this.data.videoStreamUrl = window.webkitURL.createObjectURL(stream); // TODO Webkit
-};
-WebcamController.prototype._drawImage = function () {
-    var canvas = document.getElementById(this.data.canvasElemId).getContext('2d');
-    canvas.drawImage(document.getElementById(this.data.videoElemId), 0, 0);
-    return this;
-};
-WebcamController.prototype._getImage = function () {
-    return document.getElementById(this.data.canvasElemId).toDataURL();
-};
-WebcamController.prototype.takeImage = function () {
-    this._drawImage();
-    this.emit('new', this._getImage());
-};
-WebcamController.prototype.takeImageSequence = function (qty, interval) {
-    var t = this, // TODO bind
-        images = [];
-    qty = qty || 10;
-    interval = interval || 30;
-    (function () {
-        var counter = 0,
-            timer = setInterval(function () {
-                t._drawImage();
-                images.push(t._getImage());
-                counter++;
-                if (counter >= qty) {
-                    clearTimeout(timer);
-                    t.emit('new', images);
-                }
-            }, interval);
-    }());
-};
-
-/*
-    Timeline
-*/
-
-function TimelineController (elem, template) {
-    this.elem = elem;
-    this.template = template;
-    this.data = {};
-    this.data.frames = [];
-
-    Object.observe(this.data.frames, function (changes) {
-        this.emit('change', changes);
-    }.bind(this));
-
-    this.on('change', this.render.bind(this));
-
-    this.render();
-}
-TimelineController.prototype = new Controller();
-TimelineController.prototype.addFrame = function (frame) {
-    if (Array.isArray(frame)) {
-        frame.forEach(function (f) {
-            this.addFrame(f);
-        }.bind(this));
-    } else {
-        this.data.frames.push(frame);
-    }
-};
-TimelineController.prototype.getFrames = function () {
-    return this.data.frames;
-}
-
-/*
-    Gif
-*/
-
-function GifController (elem, template) {
-    this.elem = elem;
-    this.template = template;
-
-    this.data = {};
-    this.data.buttonElemId = 'make_gif_button';
-
-    Object.observe(this.data, function (changes) {
-        this.emit('change', changes);
-    }.bind(this));
-
-    this.on('change', this.render.bind(this));
-
-    this.elem.addEventListener('click', function (e) {
-        if (e.target.getAttribute('id') === this.data.buttonElemId) {
-            this.emit('generate');
-        }
-    }.bind(this));
-
-    this.render();
-}
-GifController.prototype = new Controller();
-GifController.prototype.generate = function (frames) {
-    var gif = new GIF({
-        workers: 10,
-        quality: 10,
-        workerScript: '/bower_components/gif.js/dist/gif.worker.js'
-    });
-
-    frames.forEach(function (frame) {
-        var img = document.createElement('img');
-        img.setAttribute('src', frame);
-        gif.addFrame(img, {
-            delay: 60
-        });
-    });
-
-    gif.render();
-    gif.on('finished', function (blob) {
-        this.data.src = window.webkitURL.createObjectURL(blob);
-    }.bind(this));
-};
-
-/*
-    Bootstrap
-*/
-
 (function () {
     var WebcamView = document.getElementById('WebcamView'),
         WebcamViewTemplate = document.getElementById('WebcamViewTemplate').innerText,
@@ -291,7 +68,6 @@ GifController.prototype.generate = function (frames) {
         GifCtrl.generate(TimelineCtrl.getFrames()); // TODO
     });
 }());
-
 </script>
 </body>
 </html>
