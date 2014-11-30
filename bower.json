@@ -1,0 +1,24 @@
+{
+  "name": "gif-maker",
+  "version": "0.1.0",
+  "authors": [
+    "Michael Puckett <michaelcpuckett@gmail.com>"
+  ],
+  "moduleType": [
+    "node"
+  ],
+  "license": "MIT",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "devDependencies": {},
+  "dependencies": {
+    "mustache": "~0.8.2",
+    "gif.js": "~0.1.6"
+  }
+}
